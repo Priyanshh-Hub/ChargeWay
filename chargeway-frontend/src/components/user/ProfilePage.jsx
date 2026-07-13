@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import toast from 'react-hot-toast';
 import { api } from '../../api/api';
-import { GlassCard, Btn, Alert } from '../ui/index';
+import { GlassCard, Btn, Alert, PasswordInput, Modal } from '../ui/index';
+import Icon from '../ui/Icon';
 
-const ProfilePage = ({ user, onUserUpdate }) => {
+const ProfilePage = ({ user, onUserUpdate, setActiveView, onLogout }) => {
   const [editMode, setEditMode]   = useState(false);
   const [name, setName]           = useState(user.name || '');
   const [phone, setPhone]         = useState(user.phone || '');
@@ -19,6 +21,20 @@ const ProfilePage = ({ user, onUserUpdate }) => {
   const [pwdLoading, setPwdLoading]   = useState(false);
   const [pwdSuccess, setPwdSuccess]   = useState('');
   const [pwdError, setPwdError]       = useState('');
+
+  // Preferences
+  const [prefs, setPrefs] = useState({
+    emailNotifications: user.preferences?.emailNotifications ?? true,
+    smsNotifications:   user.preferences?.smsNotifications ?? false,
+    promotions:         user.preferences?.promotions ?? true,
+  });
+  const [prefsLoading, setPrefsLoading] = useState(false);
+
+  // Delete account
+  const [deleteOpen, setDeleteOpen]       = useState(false);
+  const [deletePwd, setDeletePwd]         = useState('');
+  const [deleteError, setDeleteError]     = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const initials = user.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '?';
 
@@ -45,7 +61,7 @@ const ProfilePage = ({ user, onUserUpdate }) => {
     setPwdError(''); setPwdSuccess('');
     if (!currentPwd || !newPwd || !confirmPwd) return setPwdError('All fields are required');
     if (newPwd !== confirmPwd) return setPwdError('New passwords do not match');
-    if (newPwd.length < 6) return setPwdError('Password must be at least 6 characters');
+    if (newPwd.length < 8) return setPwdError('Password must be at least 8 characters');
     setPwdLoading(true);
     const res = await api.put('/user/password', { currentPassword: currentPwd, newPassword: newPwd });
     if (res.ok) {
@@ -58,14 +74,30 @@ const ProfilePage = ({ user, onUserUpdate }) => {
     setPwdLoading(false);
   };
 
-  const pwdStrength = (p) => {
-    if (!p) return { w: '0%', color: '#334155', label: '' };
-    if (p.length < 4) return { w: '25%', color: '#ef4444', label: 'Weak' };
-    if (p.length < 7) return { w: '50%', color: '#f59e0b', label: 'Fair' };
-    if (p.length < 10) return { w: '75%', color: '#3b82f6', label: 'Good' };
-    return { w: '100%', color: '#10b981', label: 'Strong' };
+  const togglePref = async (key) => {
+    const next = { ...prefs, [key]: !prefs[key] };
+    setPrefs(next);
+    setPrefsLoading(true);
+    const res = await api.put('/user/preferences', next);
+    if (res.ok) { onUserUpdate(res.data.user); toast.success('Preferences updated'); }
+    else { setPrefs(prefs); toast.error(res.error || 'Failed to update preferences'); }
+    setPrefsLoading(false);
   };
-  const strength = pwdStrength(newPwd);
+
+  const handleDeleteAccount = async () => {
+    if (!deletePwd) { setDeleteError('Enter your password to confirm'); return; }
+    setDeleteLoading(true); setDeleteError('');
+    const res = await api.delete('/user/me', { password: deletePwd });
+    setDeleteLoading(false);
+    if (res.ok) {
+      toast.success('Account deleted. Sorry to see you go.');
+      if (onLogout) onLogout();
+    } else {
+      setDeleteError(res.error || 'Failed to delete account');
+    }
+  };
+
+  const pwdsMatch = confirmPwd.length > 0 && newPwd === confirmPwd;
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
@@ -189,39 +221,59 @@ const ProfilePage = ({ user, onUserUpdate }) => {
 
         {showPwd && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-            {[
-              { label: 'Current Password',  val: currentPwd, set: setCurrentPwd },
-              { label: 'New Password',      val: newPwd,     set: setNewPwd     },
-              { label: 'Confirm Password',  val: confirmPwd, set: setConfirmPwd },
-            ].map(f => (
-              <div key={f.label}>
-                <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1.5 block">{f.label}</label>
-                <input type="password" value={f.val} onChange={e => f.set(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full rounded-xl px-4 py-3 text-white outline-none border transition-all"
-                  style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }} />
-              </div>
-            ))}
-
-            {/* Password strength bar */}
-            {newPwd.length > 0 && (
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-500">Password strength</span>
-                  <span style={{ color: strength.color }}>{strength.label}</span>
-                </div>
-                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
-                  <motion.div className="h-full rounded-full" animate={{ width: strength.w }}
-                    style={{ background: strength.color }} transition={{ duration: 0.3 }} />
-                </div>
-              </div>
-            )}
+            <PasswordInput label="Current Password" value={currentPwd} onChange={e => setCurrentPwd(e.target.value)} autoComplete="current-password" />
+            <PasswordInput label="New Password" value={newPwd} onChange={e => setNewPwd(e.target.value)} autoComplete="new-password" showStrength showRules />
+            <PasswordInput label="Confirm New Password" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)} autoComplete="new-password"
+              error={confirmPwd.length > 0 && !pwdsMatch ? "Passwords do not match" : undefined} />
 
             <Btn onClick={handlePasswordChange} loading={pwdLoading} className="w-full mt-2">
               Update Password
             </Btn>
           </motion.div>
         )}
+      </GlassCard>
+
+      {/* My Vehicles quick link */}
+      {user.role === "User" && setActiveView && (
+        <GlassCard className="p-6 flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: "rgba(0,196,255,0.1)" }}>
+              <Icon name="car" className="w-5 h-5 text-cyan-400" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-300">My Vehicles</h3>
+              <p className="text-slate-500 text-xs mt-0.5">Manage vehicles linked to your account</p>
+            </div>
+          </div>
+          <Btn variant="outline" onClick={() => setActiveView("vehicles")}>Manage →</Btn>
+        </GlassCard>
+      )}
+
+      {/* Notification Preferences */}
+      <GlassCard className="p-6">
+        <h3 className="font-bold text-slate-300 text-lg mb-1">Notification Preferences</h3>
+        <p className="text-slate-500 text-xs mb-5">Choose what ChargeWay can contact you about</p>
+        <div className="space-y-3">
+          {[
+            { key: "emailNotifications", label: "Email notifications", sub: "Booking confirmations, receipts, and account alerts" },
+            { key: "smsNotifications",   label: "SMS notifications",   sub: "Charging status and time-sensitive alerts" },
+            { key: "promotions",         label: "Offers & promotions", sub: "Occasional discounts and product updates" },
+          ].map(p => (
+            <div key={p.key} className="flex items-center justify-between p-3 rounded-xl" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <div>
+                <p className="text-sm font-semibold text-white">{p.label}</p>
+                <p className="text-xs text-slate-500">{p.sub}</p>
+              </div>
+              <button onClick={() => togglePref(p.key)} disabled={prefsLoading}
+                className="w-11 h-6 rounded-full relative transition-all flex-shrink-0"
+                style={{ background: prefs[p.key] ? "linear-gradient(135deg,#0066FF,#00C4FF)" : "rgba(255,255,255,0.1)" }}
+                aria-pressed={prefs[p.key]} role="switch">
+                <motion.span className="absolute top-1 w-4 h-4 rounded-full bg-white"
+                  animate={{ left: prefs[p.key] ? 22 : 4 }} transition={{ duration: 0.15 }} />
+              </button>
+            </div>
+          ))}
+        </div>
       </GlassCard>
 
       {/* Account Stats */}
@@ -241,6 +293,23 @@ const ProfilePage = ({ user, onUserUpdate }) => {
           ))}
         </div>
       </GlassCard>
+
+      {/* Danger Zone */}
+      <GlassCard className="p-6" style={{ borderColor: "rgba(239,68,68,0.2)" }}>
+        <h3 className="font-bold text-red-400 text-lg mb-1">Danger Zone</h3>
+        <p className="text-slate-500 text-xs mb-4">Deleting your account is permanent and cannot be undone. All your bookings, vehicles, and invoices will be removed.</p>
+        <Btn variant="danger" onClick={() => setDeleteOpen(true)}>Delete My Account</Btn>
+      </GlassCard>
+
+      <Modal open={deleteOpen} onClose={() => { setDeleteOpen(false); setDeletePwd(''); setDeleteError(''); }} title="Delete your account?">
+        <Alert message={deleteError} />
+        <p className="text-sm text-slate-400 mb-4">This can't be undone. Enter your password to confirm you want to permanently delete your ChargeWay account.</p>
+        <PasswordInput label="Password" value={deletePwd} onChange={e => setDeletePwd(e.target.value)} placeholder="Enter your password" />
+        <div className="flex gap-3 mt-5">
+          <Btn variant="ghost" onClick={() => setDeleteOpen(false)} className="flex-1">Cancel</Btn>
+          <Btn variant="danger" onClick={handleDeleteAccount} loading={deleteLoading} className="flex-1">Delete Permanently</Btn>
+        </div>
+      </Modal>
 
     </div>
   );

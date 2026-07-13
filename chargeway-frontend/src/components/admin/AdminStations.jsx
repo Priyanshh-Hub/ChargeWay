@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api, serverImg } from '../../api/api';
@@ -53,6 +54,10 @@ const AdminStations = () => {
   };
 
   const handleSave = async () => {
+    if (!editForm.managerId) {
+      setSaveMsg('❌ Every station must have a manager assigned.');
+      return;
+    }
     setSaving(true); setSaveMsg('');
     const payload = {
       ...editForm,
@@ -60,7 +65,7 @@ const AdminStations = () => {
       lng:           parseFloat(editForm.lng),
       price_per_kwh: parseFloat(editForm.price_per_kwh),
       facilities,
-      managerId:     editForm.managerId || null,
+      managerId:     editForm.managerId,
     };
     const res = await api.put(`/stations/${editTarget._id}/edit`, payload);
     if (res.ok) {
@@ -81,7 +86,7 @@ const AdminStations = () => {
       setStations(prev => prev.filter(s => s._id !== confirmDel._id));
       setConfirmDel(null); setSelected(null);
     } else {
-      alert(res.error || "Failed to delete station");
+      toast.error(res.error || "Failed to delete station");
     }
     setDeleting(false);
   };
@@ -330,12 +335,18 @@ const AdminStations = () => {
                     <select value={editForm.managerId || ''}
                       onChange={e => setEditForm(p => ({ ...p, managerId: e.target.value }))}
                       className="w-full rounded-xl px-4 py-2.5 text-white text-sm outline-none border"
-                      style={{ background: "rgba(30,40,60,1)", borderColor: "rgba(0,196,255,0.3)" }}>
-                      <option value="">— No Manager —</option>
+                      style={{ background: "rgba(30,40,60,1)", borderColor: editForm.managerId ? "rgba(0,196,255,0.3)" : "rgba(239,68,68,0.4)" }}>
+                      <option value="" disabled>— Select a manager (required) —</option>
                       {managers.map(m => (
                         <option key={m._id} value={m._id}>{m.name} ({m.email})</option>
                       ))}
                     </select>
+                    {!editForm.managerId && (
+                      <p className="text-red-400 text-xs mt-1">Every station must have a manager assigned.</p>
+                    )}
+                    {managers.length === 0 && (
+                      <p className="text-yellow-400 text-xs mt-1">No Station Manager accounts exist yet — create one before assigning.</p>
+                    )}
                   </div>
 
                   {/* Facilities */}

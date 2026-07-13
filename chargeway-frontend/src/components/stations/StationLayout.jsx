@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api, serverImg } from '../../api/api';
-import { GlassCard, Alert, Btn, Spinner } from '../ui/index';
+import { GlassCard, Alert, Btn } from '../ui/index';
 import Icon from '../ui/Icon';
 import BookingModal from './BookingModal';
 
@@ -107,7 +107,14 @@ const StationLayout = ({ stationId, onBack, user, onConfirmBooking, activeBookin
     }
   };
 
-  if (loading) return <Spinner />;
+  if (loading) return (
+    <div className="space-y-6">
+      <div className="h-5 w-32 rounded animate-pulse bg-white/5" />
+      <div className="h-8 w-72 rounded-lg animate-pulse bg-white/5" />
+      <div className="h-48 rounded-2xl animate-pulse bg-white/5" />
+      <div className="h-40 rounded-2xl animate-pulse bg-white/5" />
+    </div>
+  );
   if (!station) return <div className="text-slate-400 text-center py-12">Station not found.</div>;
 
   const isOffline = station.status === "Offline";

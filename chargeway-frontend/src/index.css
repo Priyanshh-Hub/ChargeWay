@@ -25,3 +25,56 @@
 .animate-fade-in-up { animation: fade-in-up 0.5s ease-out forwards; }
 .animate-fade-in-right { animation: fade-in-right 0.5s ease-out forwards; }
 .animate-fade-in-fast { animation: fade-in-fast 0.3s ease-out forwards; }
+
+/* Skeleton shimmer */
+@keyframes cw-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Animated background layers */
+@keyframes cw-gradient-move {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes cw-glow-drift-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(4%, -6%) scale(1.08); }
+}
+@keyframes cw-glow-drift-b {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(-5%, 5%) scale(1.05); }
+}
+@keyframes cw-particle-float {
+  0%   { transform: translateY(0) translateX(0); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(-110vh) translateX(12px); opacity: 0; }
+}
+
+.cw-bg-gradient-move { animation: cw-gradient-move 24s ease-in-out infinite; }
+.cw-glow-a { animation: cw-glow-drift-a 18s ease-in-out infinite; }
+.cw-glow-b { animation: cw-glow-drift-b 22s ease-in-out infinite; }
+.cw-particle { animation-name: cw-particle-float; animation-timing-function: linear; animation-iteration-count: infinite; }
+
+/* Respect reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Visible keyboard focus ring for accessibility */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[role="checkbox"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid rgba(0,196,255,0.6);
+  outline-offset: 2px;
+}

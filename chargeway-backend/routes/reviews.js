@@ -27,6 +27,12 @@ router.post("/:stationId", verifyToken, async (req, res) => {
   try {
     const { rating, comment } = req.body;
 
+    const numRating = Number(rating);
+    if (!Number.isInteger(numRating) || numRating < 1 || numRating > 5) {
+      return res.status(400).json({ error: "Rating must be a whole number between 1 and 5." });
+    }
+    const cleanComment = typeof comment === "string" ? comment.trim().slice(0, 1000) : "";
+
     // Must have a completed booking at this station
     const hasBooking = await Booking.findOne({
       userId:    req.user.id,
@@ -40,7 +46,7 @@ router.post("/:stationId", verifyToken, async (req, res) => {
     // Upsert — update if already reviewed
     const review = await Review.findOneAndUpdate(
       { userId: req.user.id, stationId: req.params.stationId },
-      { rating, comment },
+      { rating: numRating, comment: cleanComment },
       { new: true, upsert: true }
     ).populate("userId", "name");
 

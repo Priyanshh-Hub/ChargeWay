@@ -1,12 +1,14 @@
 import React from 'react';
 import Icon from '../ui/Icon';
+import Logo from '../ui/Logo';
 
 const AppHeader = ({ user, onLogout, activeView, setActiveView }) => {
   const navItems = {
     User: [
       { id: "main",         label: "Home",      icon: "bolt"      },
       { id: "findstations", label: "Stations",  icon: "stations"  },
-      { id: "bookings",     label: "Bookings",  icon: "booking"   },
+      { id: "bookings",     label: "Sessions",  icon: "booking"   },
+      { id: "vehicles",     label: "Vehicles",  icon: "car"       },
       { id: "invoices",     label: "Invoices",  icon: "invoices"  },
     ],
     "Station Manager": [
@@ -26,16 +28,7 @@ const AppHeader = ({ user, onLogout, activeView, setActiveView }) => {
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/5"
       style={{ background: "rgba(5,13,26,0.9)", backdropFilter: "blur(20px)" }}>
       <div className="container mx-auto px-6 py-3 flex items-center justify-between max-w-7xl">
-        <div className="flex items-center space-x-2">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, #00C4FF, #0066FF)" }}>
-            <Icon name="bolt" className="w-4 h-4 text-white" />
-          </div>
-          <span className="text-lg font-black"
-            style={{ background: "linear-gradient(90deg, #00C4FF, #60A5FA)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-            ChargeWay
-          </span>
-        </div>
+        <Logo size="sm" />
 
         <nav className="hidden md:flex items-center gap-1">
           {items.map(item => (

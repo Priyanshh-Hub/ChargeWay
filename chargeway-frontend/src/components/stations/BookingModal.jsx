@@ -1,6 +1,7 @@
 import React from 'react';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { QRCodeSVG } from 'qrcode.react';
 import { api } from '../../api/api';
 import { VEHICLE_NUMBER_REGEX } from '../../constants/validation';
 import { GlassCard, Btn, Alert } from '../ui/index';
@@ -87,6 +88,11 @@ const BookingModal = ({ station, charger, car, user, onClose, onConfirmBooking }
         </motion.div>
         <h2 className="text-2xl font-black text-white mb-1">Booking Confirmed!</h2>
         <p className="text-slate-400 text-sm mb-5">Your charging slot is reserved</p>
+
+        <div className="flex flex-col items-center gap-2 p-4 rounded-xl mb-4" style={{ background: "white" }}>
+          <QRCodeSVG value={JSON.stringify({ bookingId: confirmed._id, stationId: station._id, chargerId: charger.id })} size={140} />
+          <p className="text-slate-600 text-xs font-medium">Show this at the charger to check in</p>
+        </div>
         <div className="p-4 rounded-xl text-sm text-left space-y-2 mb-4" style={{ background: "rgba(0,196,255,0.05)", border: "1px solid rgba(0,196,255,0.1)" }}>
           {[
             { l: "Booking ID", v: confirmed._id,                      mono: true  },

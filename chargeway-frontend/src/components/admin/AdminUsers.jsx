@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../api/api';
@@ -28,7 +29,7 @@ const AdminUsers = () => {
       setConfirmDel(null);
       setSelected(null);
     } else {
-      alert(res.error || "Failed to delete user");
+      toast.error(res.error || "Failed to delete user");
     }
     setDeleting(false);
   };
@@ -40,7 +41,7 @@ const AdminUsers = () => {
       setUsers(prev => prev.map(x => x._id === u._id ? { ...x, isActive: res.data.user.isActive } : x));
       if (selected?._id === u._id) setSelected(prev => ({ ...prev, isActive: res.data.user.isActive }));
     } else {
-      alert(res.error || "Failed to update user status");
+      toast.error(res.error || "Failed to update user status");
     }
     setSuspending(null);
   };

@@ -1,12 +1,33 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { QRCodeSVG } from 'qrcode.react';
+import toast from 'react-hot-toast';
 import { api } from '../../api/api';
 import { GlassCard, Spinner } from '../ui/index';
+import Icon from '../ui/Icon';
+
+// GST is treated as inclusive in the recorded total (standard for Indian
+// B2C pricing) and backed out for display: 18% total = 9% CGST + 9% SGST.
+const GST_RATE = 0.18;
+const gstBreakdown = (totalCost) => {
+  const subtotal = totalCost / (1 + GST_RATE);
+  const cgst = subtotal * (GST_RATE / 2);
+  const sgst = subtotal * (GST_RATE / 2);
+  return { subtotal: subtotal.toFixed(2), cgst: cgst.toFixed(2), sgst: sgst.toFixed(2) };
+};
+
+// NOTE for developers: this is a placeholder GSTIN for demo purposes.
+// Replace with your registered GSTIN before using this in production.
+const COMPANY_GSTIN = "24XXXXX1234X1ZX";
 
 const InvoicesPage = ({ user }) => {
   const [bookings, setBookings] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [preview,  setPreview]  = useState(null);
+  const [search,   setSearch]   = useState("");
+  const [sortBy,   setSortBy]   = useState("date_desc");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo,   setDateTo]   = useState("");
 
   useEffect(() => {
     (async () => {
@@ -24,9 +45,21 @@ const InvoicesPage = ({ user }) => {
 
   const carbonSaved = (kwh) => ((kwh || 0) * 0.82).toFixed(2); // 0.82 kg CO2 saved per kWh vs petrol
 
-  const downloadInvoice = (b, index) => {
+  const buildQrSvg = async (b, serialNo) => {
+    try {
+      const { renderToStaticMarkup } = await import('react-dom/server');
+      return renderToStaticMarkup(
+        <QRCodeSVG value={JSON.stringify({ invoice: serialNo, bookingId: b._id, amount: b.totalCost })} size={104} bgColor="#ffffff" fgColor="#0a1628" />
+      );
+    } catch (err) {
+      console.error("QR generation failed, continuing without it:", err);
+      return "";
+    }
+  };
+
+  const downloadInvoice = async (b, index) => {
     const serialNo = getSerial(b, index);
-    const html = buildInvoiceHTML(b, serialNo, user);
+    const html = buildInvoiceHTML(b, serialNo, user, await buildQrSvg(b, serialNo));
     const blob = new Blob([html], { type: "text/html" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -35,11 +68,56 @@ const InvoicesPage = ({ user }) => {
     URL.revokeObjectURL(a.href);
   };
 
+  const printInvoice = async (b, index) => {
+    const serialNo = getSerial(b, index);
+    const html = buildInvoiceHTML(b, serialNo, user, await buildQrSvg(b, serialNo));
+    const win = window.open("", "_blank");
+    if (!win) { toast.error("Please allow pop-ups to print this invoice."); return; }
+    win.document.write(html);
+    win.document.close();
+    win.onload = () => win.print();
+  };
+
+  const shareInvoice = async (b, index) => {
+    const serialNo = getSerial(b, index);
+    const stationName = b.stationName || b.stationId?.name || "ChargeWay";
+    const text = `ChargeWay Invoice ${serialNo}\n${stationName} · ${b.date}\nAmount: ₹${b.totalCost}`;
+    if (navigator.share) {
+      try { await navigator.share({ title: `ChargeWay Invoice ${serialNo}`, text }); }
+      catch { /* user cancelled — no-op */ }
+    } else {
+      await navigator.clipboard.writeText(text);
+      toast.success("Invoice summary copied to clipboard");
+    }
+  };
+
   if (loading) return <Spinner text="Loading invoices..." />;
 
   const totalSpend  = bookings.reduce((s, b) => s + (b.totalCost  || 0), 0);
   const totalEnergy = bookings.reduce((s, b) => s + (b.energyKwh || 0), 0);
   const totalCarbon = bookings.reduce((s, b) => s + parseFloat(carbonSaved(b.energyKwh)), 0);
+
+  const visible = bookings
+    .filter((b, index) => {
+      const q = search.trim().toLowerCase();
+      const serialNo = getSerial(b, index).toLowerCase();
+      const matchSearch = !q || (b.stationName || b.stationId?.name || "").toLowerCase().includes(q) || serialNo.includes(q);
+      const bDate = new Date(b.date);
+      const matchFrom = !dateFrom || bDate >= new Date(dateFrom);
+      const matchTo   = !dateTo   || bDate <= new Date(dateTo);
+      return matchSearch && matchFrom && matchTo;
+    })
+    .map((b, i) => ({ b, index: bookings.indexOf(b) }))
+    .sort((a, b) => {
+      if (sortBy === "date_desc")   return new Date(b.b.date) - new Date(a.b.date);
+      if (sortBy === "date_asc")    return new Date(a.b.date) - new Date(b.b.date);
+      if (sortBy === "amount_desc") return b.b.totalCost - a.b.totalCost;
+      if (sortBy === "amount_asc")  return a.b.totalCost - b.b.totalCost;
+      return 0;
+    });
+
+  const hasActiveFilters = search || dateFrom || dateTo || sortBy !== "date_desc";
+  const clearFilters = () => { setSearch(""); setDateFrom(""); setDateTo(""); setSortBy("date_desc"); };
 
   return (
     <div className="space-y-6">
@@ -47,7 +125,7 @@ const InvoicesPage = ({ user }) => {
       {/* Header */}
       <div className="flex items-end justify-between flex-wrap gap-4">
         <div>
-          <h2 className="text-3xl font-black text-white tracking-tight">Invoices</h2>
+          <h2 className="text-page text-white tracking-tight">Invoices</h2>
           <p className="text-slate-500 text-sm mt-1">{bookings.length} completed session{bookings.length !== 1 ? 's' : ''}</p>
         </div>
         {bookings.length > 0 && (
@@ -68,15 +146,50 @@ const InvoicesPage = ({ user }) => {
         )}
       </div>
 
+      {bookings.length > 0 && (
+        <div className="rounded-2xl border border-white/10 p-4 flex flex-wrap gap-3" style={{ background: "rgba(15,25,45,0.8)" }}>
+          <div className="flex-1 min-w-48 relative">
+            <Icon name="search" className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Search by station or invoice #..."
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl text-white text-sm outline-none border"
+              style={{ background: "rgba(255,255,255,0.05)", borderColor: "rgba(255,255,255,0.1)" }} />
+          </div>
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+            className="px-3 py-2.5 rounded-xl text-sm text-slate-300 outline-none border"
+            style={{ background: "rgba(30,40,60,1)", borderColor: "rgba(255,255,255,0.1)" }} />
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+            className="px-3 py-2.5 rounded-xl text-sm text-slate-300 outline-none border"
+            style={{ background: "rgba(30,40,60,1)", borderColor: "rgba(255,255,255,0.1)" }} />
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+            className="px-3 py-2.5 rounded-xl text-sm text-slate-300 outline-none border"
+            style={{ background: "rgba(30,40,60,1)", borderColor: "rgba(255,255,255,0.1)" }}>
+            <option value="date_desc">Newest First</option>
+            <option value="date_asc">Oldest First</option>
+            <option value="amount_desc">Amount: High to Low</option>
+            <option value="amount_asc">Amount: Low to High</option>
+          </select>
+          {hasActiveFilters && (
+            <button onClick={clearFilters} className="px-3 py-2.5 rounded-xl text-xs text-red-400 border border-red-400/20 hover:bg-red-400/10 transition-all">Clear</button>
+          )}
+        </div>
+      )}
+
       {bookings.length === 0 ? (
         <GlassCard className="p-16 text-center">
-          <div className="text-6xl mb-4">🧾</div>
-          <p className="text-slate-400 font-medium">No completed sessions yet.</p>
-          <p className="text-slate-600 text-sm mt-1">Your invoices will appear here after charging.</p>
+          <div className="text-6xl mb-4">📄</div>
+          <p className="text-slate-400 font-medium">No invoices yet.</p>
+          <p className="text-slate-600 text-sm mt-1">Book your first charging session to see it here.</p>
+        </GlassCard>
+      ) : visible.length === 0 ? (
+        <GlassCard className="p-16 text-center">
+          <div className="text-6xl mb-4">🔍</div>
+          <p className="text-slate-400 font-medium">No invoices match your filters.</p>
+          <button onClick={clearFilters} className="text-cyan-400 text-sm mt-2 hover:text-cyan-300">Clear filters</button>
         </GlassCard>
       ) : (
         <div className="space-y-3">
-          {bookings.map((b, index) => {
+          {visible.map(({ b, index }) => {
             const serialNo = getSerial(b, index);
             const carbon   = carbonSaved(b.energyKwh);
             return (
@@ -161,7 +274,9 @@ const InvoicesPage = ({ user }) => {
                 b={preview.b} index={preview.index} user={user}
                 getSerial={getSerial} carbonSaved={carbonSaved}
                 onClose={() => setPreview(null)}
-                onDownload={() => { downloadInvoice(preview.b, preview.index); setPreview(null); }}
+                onDownload={() => downloadInvoice(preview.b, preview.index)}
+                onPrint={() => printInvoice(preview.b, preview.index)}
+                onShare={() => shareInvoice(preview.b, preview.index)}
               />
             </motion.div>
           </motion.div>
@@ -172,11 +287,13 @@ const InvoicesPage = ({ user }) => {
 };
 
 /* ── Dark Invoice Preview Card ── */
-const DarkInvoiceCard = ({ b, index, user, getSerial, carbonSaved, onClose, onDownload }) => {
+const DarkInvoiceCard = ({ b, index, user, getSerial, carbonSaved, onClose, onDownload, onPrint, onShare }) => {
   const serialNo   = getSerial(b, index);
   const chargeCost = (b.energyKwh * b.costPerKwh).toFixed(2);
   const carbon     = carbonSaved(b.energyKwh);
   const issueDate  = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+  const gst        = gstBreakdown(b.totalCost);
+  const bookingId  = (b._id || "").slice(-10).toUpperCase();
 
   const Row = ({ label, value, highlight, mono }) => (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
@@ -197,7 +314,9 @@ const DarkInvoiceCard = ({ b, index, user, getSerial, carbonSaved, onClose, onDo
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", position: "relative" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg,#0066FF,#00C4FF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, boxShadow: "0 0 12px rgba(0,196,255,0.4)" }}>⚡</div>
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg,#0066FF,#00C4FF)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 12px rgba(0,196,255,0.4)" }}>
+                <svg width="18" height="18" viewBox="0 0 40 40"><path d="M22.5 8 L11 21.5 H18.5 L16.5 32 L29.5 17.5 H21.5 Z" fill="white" /></svg>
+              </div>
               <span style={{ fontSize: 20, fontWeight: 900, letterSpacing: -0.5, color: "#fff" }}>ChargeWay</span>
             </div>
             <div style={{ display: "inline-block", padding: "2px 10px", borderRadius: 4, fontSize: 9, fontWeight: 800, letterSpacing: 2.5, background: "rgba(0,196,255,0.12)", border: "1px solid rgba(0,196,255,0.3)", color: "#00C4FF" }}>
@@ -230,6 +349,7 @@ const DarkInvoiceCard = ({ b, index, user, getSerial, carbonSaved, onClose, onDo
       {/* Session Details */}
       <div style={{ padding: "20px 28px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
         <div style={{ fontSize: 9, color: "#475569", letterSpacing: 1.5, fontWeight: 700, marginBottom: 12 }}>CHARGING SESSION</div>
+        <Row label="Booking ID"        value={bookingId} mono />
         <Row label="Session Date"      value={b.date} />
         <Row label="Time Slot"         value={b.timeSlot} />
         <Row label="Charger"           value={`#${b.chargerId}`} />
@@ -261,6 +381,9 @@ const DarkInvoiceCard = ({ b, index, user, getSerial, carbonSaved, onClose, onDo
         <div style={{ fontSize: 9, color: "#475569", letterSpacing: 1.5, fontWeight: 700, marginBottom: 12 }}>PAYMENT BREAKDOWN</div>
         <Row label={`Charging (${b.energyKwh} kWh × ₹${b.costPerKwh})`} value={`₹${chargeCost}`} />
         <Row label="Platform Service Fee" value={`₹${b.platformFee}`} />
+        <Row label="Taxable Value"    value={`₹${gst.subtotal}`} />
+        <Row label="CGST @ 9%"        value={`₹${gst.cgst}`} />
+        <Row label="SGST @ 9%"        value={`₹${gst.sgst}`} />
       </div>
 
       {/* Total */}
@@ -281,22 +404,33 @@ const DarkInvoiceCard = ({ b, index, user, getSerial, carbonSaved, onClose, onDo
         </span>
       </div>
 
-      {/* Footer */}
-      <div style={{ padding: "16px 28px", borderTop: "1px solid rgba(255,255,255,0.05)", background: "rgba(0,0,0,0.2)", textAlign: "center" }}>
+      {/* QR + Footer */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 28px", borderTop: "1px solid rgba(255,255,255,0.05)", background: "rgba(0,0,0,0.2)" }}>
+        <div style={{ background: "#fff", padding: 6, borderRadius: 8, flexShrink: 0 }}>
+          <QRCodeSVG value={JSON.stringify({ invoice: serialNo, bookingId: b._id, amount: b.totalCost })} size={64} />
+        </div>
         <div style={{ fontSize: 10, color: "#334155", lineHeight: 1.8 }}>
-          <span style={{ color: "#00C4FF", fontWeight: 700 }}>⚡ ChargeWay</span> · support@chargeway.com · www.chargeway.in<br />
-          GSTIN: 24XXXXX1234X1ZX · Computer-generated invoice
+          <span style={{ color: "#00C4FF", fontWeight: 700 }}>ChargeWay</span> · support@chargeway.com · www.chargeway.in<br />
+          GSTIN: {COMPANY_GSTIN} · Computer-generated invoice, no signature required
         </div>
       </div>
 
       {/* Action buttons */}
-      <div style={{ display: "flex", gap: 10, padding: "16px 28px 24px" }}>
+      <div style={{ display: "flex", gap: 8, padding: "16px 28px 24px", flexWrap: "wrap" }}>
         <button onClick={onDownload}
-          style={{ flex: 1, background: "linear-gradient(135deg,#0066FF,#00C4FF)", color: "#fff", border: "none", borderRadius: 10, padding: 13, fontSize: 13, fontWeight: 800, cursor: "pointer", boxShadow: "0 4px 16px rgba(0,102,255,0.35)", letterSpacing: 0.3 }}>
-          ↓ Download Invoice
+          style={{ flex: "1 1 auto", background: "linear-gradient(135deg,#0066FF,#00C4FF)", color: "#fff", border: "none", borderRadius: 10, padding: 13, fontSize: 13, fontWeight: 800, cursor: "pointer", boxShadow: "0 4px 16px rgba(0,102,255,0.35)", letterSpacing: 0.3 }}>
+          ↓ Download
+        </button>
+        <button onClick={onPrint}
+          style={{ flex: "1 1 auto", background: "rgba(255,255,255,0.04)", color: "#94a3b8", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: 13, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+          🖨 Print
+        </button>
+        <button onClick={onShare}
+          style={{ flex: "1 1 auto", background: "rgba(255,255,255,0.04)", color: "#94a3b8", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: 13, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+          ⤴ Share
         </button>
         <button onClick={onClose}
-          style={{ flex: 1, background: "rgba(255,255,255,0.04)", color: "#94a3b8", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: 13, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          style={{ flex: "1 1 100%", background: "transparent", color: "#64748b", border: "none", borderRadius: 10, padding: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
           Close
         </button>
       </div>
@@ -305,10 +439,28 @@ const DarkInvoiceCard = ({ b, index, user, getSerial, carbonSaved, onClose, onDo
 };
 
 /* ── Dark HTML Invoice for download ── */
-function buildInvoiceHTML(b, serialNo, user) {
+
+// The invoice below is built as a raw HTML string and downloaded as a
+// standalone .html file. Every value that originates from user input
+// (name, email, phone, vehicle number, station name) MUST be escaped
+// here — otherwise a name like `<img src=x onerror=alert(1)>` would be
+// stored as-is and execute the moment the downloaded file is opened.
+const escapeHtml = (str) => String(str ?? "").replace(/[&<>"']/g, (c) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+}[c]));
+
+function buildInvoiceHTML(b, serialNo, user, qrSvg = "") {
   const chargeCost = (b.energyKwh * b.costPerKwh).toFixed(2);
   const carbon     = ((b.energyKwh || 0) * 0.82).toFixed(2);
   const issueDate  = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+  const gst        = gstBreakdown(b.totalCost);
+  const bookingId  = (b._id || "").slice(-10).toUpperCase();
+
+  const userName    = escapeHtml(user?.name || "Customer");
+  const userEmail   = escapeHtml(user?.email || "");
+  const userPhone   = escapeHtml(user?.phone || "");
+  const vehicleNo   = escapeHtml(b.vehicleNumber);
+  const stationName = escapeHtml(b.stationName || b.stationId?.name || "—");
 
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Invoice ${serialNo} — ChargeWay</title>
@@ -356,8 +508,19 @@ function buildInvoiceHTML(b, serialNo, user) {
   .total-amt{font-size:36px;font-weight:900;color:#00C4FF;text-shadow:0 0 20px rgba(0,196,255,0.4)}
   .paid-badge{text-align:center;margin:0 0 16px}
   .paid-badge span{display:inline-flex;align-items:center;gap:6px;padding:6px 20px;border-radius:20px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);color:#10b981;font-size:12px;font-weight:800;letter-spacing:0.5px}
-  .footer{padding:18px 36px;border-top:1px solid rgba(255,255,255,0.05);background:rgba(0,0,0,0.25);text-align:center;font-size:10px;color:#334155;line-height:1.9}
+  .footer{padding:18px 36px;border-top:1px solid rgba(255,255,255,0.05);background:rgba(0,0,0,0.25);display:flex;align-items:center;gap:16px}
+  .footer-qr{background:#fff;padding:6px;border-radius:8px;flex-shrink:0}
+  .footer-text{font-size:10px;color:#334155;line-height:1.9}
   .footer strong{color:#00C4FF}
+  .actions{display:flex;gap:10px;padding:16px 36px 28px}
+  .btn{flex:1;border:none;border-radius:10px;padding:13px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit}
+  .btn-primary{background:linear-gradient(135deg,#0066FF,#00C4FF);color:#fff}
+  .btn-ghost{background:rgba(255,255,255,0.06);color:#94a3b8;border:1px solid rgba(255,255,255,0.12)}
+  @media print {
+    body{background:#fff;color:#111;padding:0}
+    .wrap{border:none;box-shadow:none;max-width:100%}
+    .actions{display:none}
+  }
 </style>
 </head>
 <body><div class="wrap">
@@ -366,7 +529,7 @@ function buildInvoiceHTML(b, serialNo, user) {
     <div class="header-inner">
       <div>
         <div class="logo-row">
-          <div class="logo-icon">⚡</div>
+          <div class="logo-icon"><svg width="18" height="18" viewBox="0 0 40 40"><path d="M22.5 8 L11 21.5 H18.5 L16.5 32 L29.5 17.5 H21.5 Z" fill="white"/></svg></div>
           <span class="logo-text">ChargeWay</span>
         </div>
         <div class="tax-badge">TAX INVOICE</div>
@@ -382,19 +545,20 @@ function buildInvoiceHTML(b, serialNo, user) {
   <div class="grid2">
     <div class="info-box dark">
       <div class="box-label">BILLED TO</div>
-      <div class="box-name">${user?.name || "Customer"}</div>
-      <div class="box-detail">${user?.email || ""}</div>
-      ${user?.phone ? `<div class="box-detail">${user.phone}</div>` : ""}
+      <div class="box-name">${userName}</div>
+      <div class="box-detail">${userEmail}</div>
+      ${userPhone ? `<div class="box-detail">${userPhone}</div>` : ""}
     </div>
     <div class="info-box cyan">
       <div class="box-label">VEHICLE</div>
-      <div class="vehicle-no">${b.vehicleNumber}</div>
-      <div class="box-detail" style="margin-top:6px">${b.stationName || b.stationId?.name || "—"}</div>
+      <div class="vehicle-no">${vehicleNo}</div>
+      <div class="box-detail" style="margin-top:6px">${stationName}</div>
     </div>
   </div>
 
   <div class="section">
     <div class="section-title">CHARGING SESSION</div>
+    <div class="row"><span class="row-label">Booking ID</span><span class="row-value" style="font-family:monospace">${bookingId}</span></div>
     <div class="row"><span class="row-label">Session Date</span><span class="row-value">${b.date}</span></div>
     <div class="row"><span class="row-label">Time Slot</span><span class="row-value">${b.timeSlot}</span></div>
     <div class="row"><span class="row-label">Charger Number</span><span class="row-value">#${b.chargerId}</span></div>
@@ -408,6 +572,9 @@ function buildInvoiceHTML(b, serialNo, user) {
     <div class="section-title">PAYMENT BREAKDOWN</div>
     <div class="row"><span class="row-label">Charging (${b.energyKwh} kWh × ₹${b.costPerKwh})</span><span class="row-value">₹${chargeCost}</span></div>
     <div class="row"><span class="row-label">Platform Service Fee</span><span class="row-value">₹${b.platformFee}</span></div>
+    <div class="row"><span class="row-label">Taxable Value</span><span class="row-value">₹${gst.subtotal}</span></div>
+    <div class="row"><span class="row-label">CGST @ 9%</span><span class="row-value">₹${gst.cgst}</span></div>
+    <div class="row"><span class="row-label">SGST @ 9%</span><span class="row-value">₹${gst.sgst}</span></div>
   </div>
 
   <div class="section" style="border-bottom:none;padding-bottom:0">
@@ -439,9 +606,16 @@ function buildInvoiceHTML(b, serialNo, user) {
   </div>
 
   <div class="footer">
-    <strong>⚡ ChargeWay</strong> — Green Energy for Every Journey<br>
-    support@chargeway.com · www.chargeway.in · GSTIN: 24XXXXX1234X1ZX<br>
-    Computer-generated invoice · No physical signature required
+    <div class="footer-qr">${qrSvg}</div>
+    <div class="footer-text">
+      <strong>ChargeWay</strong> — Green Energy for Every Journey<br>
+      support@chargeway.com · www.chargeway.in · GSTIN: ${COMPANY_GSTIN}<br>
+      Computer-generated invoice · No physical signature required
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-primary" onclick="window.print()">🖨 Print this invoice</button>
   </div>
 
 </div></body></html>`;

@@ -25,11 +25,17 @@ const reviewRoutes    = require("./routes/reviews");
 // ── App Setup ────────────────────────────────────────────────
 const app = express();
 
+// Set ALLOWED_ORIGINS in .env (comma-separated) for production, e.g.
+// ALLOWED_ORIGINS=https://app.chargeway.com,https://chargeway.com
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim())
+  : ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"];
+
 app.use(cors({
-  origin: ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"],
+  origin: allowedOrigins,
   credentials: true,
 }));
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 // Serve uploaded images
@@ -57,7 +63,16 @@ connectDB().then(() => {
     console.log(`   POST   /api/auth/register`);
     console.log(`   POST   /api/auth/login`);
     console.log(`   GET    /api/auth/me`);
-    console.log(`   PUT    /api/user/car`);
+    console.log(`   GET    /api/auth/verify-email/:token`);
+    console.log(`   POST   /api/auth/resend-verification`);
+    console.log(`   POST   /api/auth/forgot-password`);
+    console.log(`   POST   /api/auth/reset-password`);
+    console.log(`   PUT    /api/user/car        [legacy]`);
+    console.log(`   GET    /api/user/vehicles`);
+    console.log(`   POST   /api/user/vehicles`);
+    console.log(`   PUT    /api/user/vehicles/:id`);
+    console.log(`   PUT    /api/user/vehicles/:id/favorite`);
+    console.log(`   DELETE /api/user/vehicles/:id`);
     console.log(`   GET    /api/users          [Admin]`);
     console.log(`   GET    /api/stations`);
     console.log(`   POST   /api/bookings`);

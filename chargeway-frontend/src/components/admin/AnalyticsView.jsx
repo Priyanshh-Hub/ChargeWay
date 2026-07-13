@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React from 'react';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
@@ -31,7 +32,7 @@ const AnalyticsView = ({ isAdmin, user }) => {
       const a    = document.createElement("a");
       a.href = url; a.download = `ChargeWay_Report_${new Date().toISOString().split("T")[0]}.xlsx`; a.click();
       URL.revokeObjectURL(url);
-    } catch (err) { alert("Failed to download report: " + err.message); }
+    } catch (err) { toast.error("Failed to download report: " + err.message); }
     setDownloading(false);
   };
 

@@ -2,23 +2,29 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api, setToken } from '../../api/api';
 import { NAME_REGEX, INDIAN_MOBILE_REGEX, EMAIL_REGEX } from '../../constants/validation';
-import { GlassCard, InputField, Btn, Alert } from '../ui/index';
+import { isPasswordAcceptable } from '../../utils/passwordStrength';
+import { GlassCard, InputField, PasswordInput, Checkbox, Btn, Alert, Modal } from '../ui/index';
 import Icon from '../ui/Icon';
+import Logo from '../ui/Logo';
 
 const Register = ({ onLogin, onNavigate }) => {
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(1); // 1 personal, 2 station location, 3 station setup, 4 success
   const [role, setRole] = useState("User");
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
   const [generalError, setGeneralError] = useState("");
+  const [termsOpen, setTermsOpen] = useState(false);
 
-  const [personal, setPersonal] = useState({ name: "", email: "", phone: "", password: "", confirmPassword: "" });
+  const [personal, setPersonal] = useState({ name: "", email: "", phone: "", password: "", confirmPassword: "", acceptedTerms: false });
   const [stationInfo, setStationInfo] = useState({ stationName: "", stationAddress: "", lat: "", lng: "" });
   const [stationDetails, setStationDetails] = useState({
     pricePerKwh: "18",
     facilities: [],
     chargers: [{ type: "DC Fast", power: "50", count: "2" }],
   });
+  const [registeredUser, setRegisteredUser] = useState(null);
+  const [devVerifyUrl, setDevVerifyUrl] = useState("");
 
   const facilityOptions = ["Wi-Fi","Restroom","Cafe","Parking","CCTV","24/7 Open","Air Conditioning","EV Shop","Waiting Area"];
   const chargerTypes    = ["DC Fast","AC Slow","DC Ultra-Fast","AC Level 2"];
@@ -26,13 +32,39 @@ const Register = ({ onLogin, onNavigate }) => {
   const fp = (k) => (e) => setPersonal(p => ({ ...p, [k]: e.target.value }));
   const sp = (k) => (e) => setStationInfo(p => ({ ...p, [k]: e.target.value }));
 
+  // ── Live, per-field validation (runs on blur) ────────────────
+  const validateField = (field) => {
+    setTouched(t => ({ ...t, [field]: true }));
+    const e = { ...errors };
+    if (field === "name") {
+      e.name = !personal.name.trim() ? "Full name is required" : !NAME_REGEX.test(personal.name) ? "Letters and spaces only" : undefined;
+    }
+    if (field === "email") {
+      e.email = !personal.email.trim() ? "Email is required" : !EMAIL_REGEX.test(personal.email) ? "Invalid email address" : undefined;
+    }
+    if (field === "phone") {
+      e.phone = !personal.phone.trim() ? "Phone number is required" : !INDIAN_MOBILE_REGEX.test(personal.phone) ? "Valid 10-digit Indian number" : undefined;
+    }
+    if (field === "password") {
+      e.password = !isPasswordAcceptable(personal.password) ? "Minimum 8 characters" : undefined;
+    }
+    if (field === "confirmPassword") {
+      e.confirmPassword = personal.password !== personal.confirmPassword ? "Passwords do not match" : undefined;
+    }
+    setErrors(e);
+  };
+
   const validateStep1 = () => {
     const e = {};
-    if (!NAME_REGEX.test(personal.name))                           e.name            = "Letters and spaces only";
-    if (!EMAIL_REGEX.test(personal.email))                         e.email           = "Invalid email address";
-    if (!INDIAN_MOBILE_REGEX.test(personal.phone))                 e.phone           = "Valid 10-digit Indian number";
-    if (personal.password.length < 6)                              e.password        = "Minimum 6 characters";
+    if (!personal.name.trim())                                     e.name            = "Full name is required";
+    else if (!NAME_REGEX.test(personal.name))                      e.name            = "Letters and spaces only";
+    if (!personal.email.trim())                                    e.email           = "Email is required";
+    else if (!EMAIL_REGEX.test(personal.email))                    e.email           = "Invalid email address";
+    if (!personal.phone.trim())                                    e.phone           = "Phone number is required";
+    else if (!INDIAN_MOBILE_REGEX.test(personal.phone))            e.phone           = "Valid 10-digit Indian number";
+    if (!isPasswordAcceptable(personal.password))                  e.password        = "Minimum 8 characters";
     if (personal.password !== personal.confirmPassword)            e.confirmPassword = "Passwords do not match";
+    if (!personal.acceptedTerms)                                   e.acceptedTerms   = "You must accept the Terms & Conditions to continue";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -76,7 +108,10 @@ const Register = ({ onLogin, onNavigate }) => {
   const updateCharger = (i, k, v)   => setStationDetails(p => ({ ...p, chargers: p.chargers.map((c, idx) => idx === i ? { ...c, [k]: v } : c) }));
 
   const handleFinalSubmit = async () => {
-    if (role === "Station Manager" && !validateStep3()) return;
+    if (role === "Station Manager") {
+      if (!validateStep3()) return;
+      if (!personal.acceptedTerms) { setErrors(e => ({ ...e, acceptedTerms: "You must accept the Terms & Conditions" })); return; }
+    }
     setLoading(true); setGeneralError("");
 
     const chargersArray = [];
@@ -98,8 +133,18 @@ const Register = ({ onLogin, onNavigate }) => {
     };
 
     const res = await api.post("/auth/register", payload);
-    if (res.ok) { setToken(res.data.token); onLogin(res.data.user); }
-    else setGeneralError(res.error || "Registration failed. Please try again.");
+    if (res.ok) {
+      setToken(res.data.token);
+      setRegisteredUser(res.data.user);
+      setDevVerifyUrl(res.data.devVerifyUrl || "");
+      setStep(4);
+    } else if (res.code === "EMAIL_EXISTS") {
+      setStep(1);
+      setErrors(e => ({ ...e, email: "This email is already registered. Try signing in instead." }));
+      setGeneralError("An account with this email already exists.");
+    } else {
+      setGeneralError(res.error || "Registration failed. Please try again.");
+    }
     setLoading(false);
   };
 
@@ -129,15 +174,44 @@ const Register = ({ onLogin, onNavigate }) => {
     );
   };
 
+  if (step === 4 && registeredUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md text-center">
+          <GlassCard className="p-8">
+            <motion.div
+              initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 260, damping: 16, delay: 0.1 }}
+              className="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center mb-5"
+              style={{ background: "linear-gradient(135deg,#10b981,#06b6d4)" }}>
+              <Icon name="check" className="w-8 h-8 text-white" />
+            </motion.div>
+            <h1 className="text-2xl font-black text-white mb-1">🎉 Welcome to ChargeWay</h1>
+            <p className="text-slate-400 text-sm mb-5">Your account has been created, {registeredUser.name.split(" ")[0]}.</p>
+
+            <div className="p-3 rounded-xl text-left text-xs space-y-1.5 mb-6" style={{ background: "rgba(0,196,255,0.05)", border: "1px solid rgba(0,196,255,0.15)" }}>
+              <p className="text-cyan-400 font-semibold flex items-center gap-1.5"><Icon name="mail" className="w-3.5 h-3.5" /> Verify your email</p>
+              <p className="text-slate-400">We've sent a verification link to <span className="text-white">{registeredUser.email}</span>. You can keep using ChargeWay in the meantime.</p>
+              {devVerifyUrl && (
+                <p className="text-slate-500 pt-1">
+                  Dev mode — no email server configured. <span className="text-cyan-400">Verification would open:</span> <code className="text-slate-400">{devVerifyUrl}</code>
+                </p>
+              )}
+            </div>
+
+            <Btn onClick={() => onLogin(registeredUser)} className="w-full">Continue →</Btn>
+          </GlassCard>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 py-10">
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-lg">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4" style={{ background: "linear-gradient(135deg, #0066FF, #00C4FF)" }}>
-            <Icon name="bolt" className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-3xl font-black text-white">Create Account</h1>
-          <p className="text-slate-400 mt-1 text-sm">Join the EV revolution</p>
+          <Logo size="md" className="mb-4 justify-center" />
+          <h1 className="text-hero text-white">Create Account</h1>
+          <p className="text-slate-400 mt-1 text-sm">Start your EV charging journey.</p>
         </div>
 
         {step === 1 && (
@@ -161,11 +235,26 @@ const Register = ({ onLogin, onNavigate }) => {
             {step === 1 && (
               <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
                 <div className="mb-4"><h2 className="text-lg font-black text-white">Personal Information</h2><p className="text-slate-400 text-xs mt-0.5">Tell us about yourself</p></div>
-                <InputField label="Full Name"        value={personal.name}            onChange={fp("name")}            error={errors.name}            placeholder="Priyansh Patel"    required />
-                <InputField label="Email Address"    type="email" value={personal.email}  onChange={fp("email")}  error={errors.email}  placeholder="you@example.com"   required />
-                <InputField label="Phone Number"     type="tel"   value={personal.phone}  onChange={fp("phone")}  error={errors.phone}  placeholder="9XXXXXXXXX"         required />
-                <InputField label="Password"         type="password" value={personal.password}        onChange={fp("password")}        error={errors.password}        placeholder="Minimum 6 characters" required />
-                <InputField label="Confirm Password" type="password" value={personal.confirmPassword} onChange={fp("confirmPassword")} error={errors.confirmPassword} placeholder="Re-enter password"    required />
+                <InputField label="Full Name"     value={personal.name}  onChange={fp("name")}  onBlur={() => validateField("name")}  error={errors.name}  valid={touched.name && !errors.name && personal.name.trim().length > 0} placeholder="Priyansh Patel"  required />
+                <InputField label="Email Address" type="email" value={personal.email} onChange={fp("email")} onBlur={() => validateField("email")} error={errors.email} valid={touched.email && !errors.email && personal.email.trim().length > 0} placeholder="you@example.com" required />
+                <InputField label="Phone Number"  type="tel"   value={personal.phone} onChange={fp("phone")} onBlur={() => validateField("phone")} error={errors.phone} valid={touched.phone && !errors.phone && personal.phone.trim().length > 0} placeholder="9XXXXXXXXX" required />
+                <PasswordInput
+                  label="Password" value={personal.password}
+                  onChange={e => { fp("password")(e); }}
+                  error={errors.password} placeholder="Minimum 8 characters, letters + numbers"
+                  showStrength showRules required
+                />
+                <PasswordInput
+                  label="Confirm Password" value={personal.confirmPassword} onChange={fp("confirmPassword")}
+                  error={errors.confirmPassword} placeholder="Re-enter password" required
+                />
+                <Checkbox
+                  id="accept-terms"
+                  checked={personal.acceptedTerms}
+                  onChange={(v) => setPersonal(p => ({ ...p, acceptedTerms: v }))}
+                  error={errors.acceptedTerms}
+                  label={<>I agree to the <button type="button" onClick={(e) => { e.preventDefault(); setTermsOpen(true); }} className="text-cyan-400 underline hover:text-cyan-300">Terms & Conditions</button> and Privacy Policy</>}
+                />
                 <Btn onClick={handleStep1Next} loading={loading} className="w-full mt-2">
                   {role === "User" ? "Create Account" : "Next — Station Location →"}
                 </Btn>
@@ -279,6 +368,17 @@ const Register = ({ onLogin, onNavigate }) => {
           )}
         </GlassCard>
       </motion.div>
+
+      <Modal open={termsOpen} onClose={() => setTermsOpen(false)} title="Terms & Conditions" maxWidth="max-w-lg">
+        <div className="text-sm text-slate-400 space-y-3 max-h-96 overflow-y-auto pr-1">
+          <p>By creating a ChargeWay account, you agree to use the platform responsibly for locating, booking, and paying for EV charging sessions.</p>
+          <p>You're responsible for the accuracy of your vehicle and payment details, and for cancelling bookings you no longer need so chargers stay available for other drivers.</p>
+          <p>Station Managers are responsible for keeping charger status, pricing, and amenities accurate and up to date.</p>
+          <p>We store your account data to operate the service and will never sell it to third parties. See our Privacy Policy for details on data handling.</p>
+          <p className="text-slate-500 text-xs">This is placeholder legal copy for the demo app — replace with real Terms & Privacy Policy content before launch.</p>
+        </div>
+        <Btn onClick={() => setTermsOpen(false)} className="w-full mt-5">Close</Btn>
+      </Modal>
     </div>
   );
 };

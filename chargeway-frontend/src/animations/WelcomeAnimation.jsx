@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, useMotionValue, useTransform, animate, AnimatePresence } from 'framer-motion';
-import { serverImg } from '../api/api';
 import Icon from '../components/ui/Icon';
+import VehicleVisual from '../components/vehicle/VehicleVisual';
 
 const AnimatedNumber = ({ to }) => {
   const count   = useMotionValue(0);
@@ -10,13 +10,19 @@ const AnimatedNumber = ({ to }) => {
   return <motion.span>{rounded}</motion.span>;
 };
 
+const LOADING_MESSAGES = ["Connecting...", "Loading your charging history...", "Preparing your dashboard..."];
+
 const WelcomeAnimation = ({ user, totals, onComplete }) => {
   const [phase, setPhase] = useState("loading");
+  const [messageIndex, setMessageIndex] = useState(0);
 
   useEffect(() => {
-    const t1 = setTimeout(() => setPhase("welcome"), 1200);
-    const t2 = setTimeout(onComplete, 3500);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
+    const messageTimers = LOADING_MESSAGES.map((_, i) =>
+      setTimeout(() => setMessageIndex(i), i * 550)
+    );
+    const t1 = setTimeout(() => setPhase("welcome"), 1800);
+    const t2 = setTimeout(onComplete, 4100);
+    return () => { messageTimers.forEach(clearTimeout); clearTimeout(t1); clearTimeout(t2); };
   }, [onComplete]);
 
   return (
@@ -50,14 +56,21 @@ const WelcomeAnimation = ({ user, totals, onComplete }) => {
 
             <div className="text-center">
               <p className="text-white font-black text-xl tracking-wide">ChargeWay</p>
-              <p className="text-slate-500 text-sm mt-1">Loading your dashboard...</p>
+              <AnimatePresence mode="wait">
+                <motion.p key={messageIndex}
+                  initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.25 }}
+                  className="text-slate-500 text-sm mt-1">
+                  {LOADING_MESSAGES[messageIndex]}
+                </motion.p>
+              </AnimatePresence>
             </div>
 
             <div className="w-48 h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
               <motion.div className="h-full rounded-full"
                 style={{ background: "linear-gradient(90deg,#0066FF,#00C4FF)" }}
                 initial={{ width: "0%" }} animate={{ width: "100%" }}
-                transition={{ duration: 1.1, ease: "easeInOut" }} />
+                transition={{ duration: 1.7, ease: "easeInOut" }} />
             </div>
           </motion.div>
         )}
@@ -70,12 +83,12 @@ const WelcomeAnimation = ({ user, totals, onComplete }) => {
 
             {user?.role === "User" && (
               <>
-                {user.car?.image ? (
-                  <motion.img src={serverImg(user.car.image)} alt="car"
-                    className="h-44 mx-auto object-contain drop-shadow-2xl"
+                {user.car ? (
+                  <motion.div className="w-64 h-36 mx-auto drop-shadow-2xl"
                     initial={{ x: -200, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
-                    transition={{ type: "spring", stiffness: 60 }}
-                    onError={e => { e.target.style.display = "none"; }} />
+                    transition={{ type: "spring", stiffness: 60 }}>
+                    <VehicleVisual color={user.car.color} connectorType={user.car.connectorType} size="md" charging />
+                  </motion.div>
                 ) : (
                   <motion.div className="w-20 h-20 mx-auto rounded-2xl flex items-center justify-center"
                     style={{ background: "linear-gradient(135deg,#0066FF,#00C4FF)" }}
@@ -85,8 +98,9 @@ const WelcomeAnimation = ({ user, totals, onComplete }) => {
                 )}
                 <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }}>
                   <p className="text-slate-400 text-sm mb-1">Welcome back</p>
-                  <h1 className="text-4xl font-black">{user.name.split(" ")[0]}! ⚡</h1>
-                  {user.car && <p className="text-cyan-400 mt-2 font-medium">{user.car.brand} {user.car.model}</p>}
+                  <h1 className="text-4xl font-black">{user.name.split(" ")[0]}</h1>
+                  <p className="text-cyan-400 mt-2 font-semibold">Ready to Charge ⚡</p>
+                  {user.car && <p className="text-slate-500 mt-1 text-sm">{user.car.brand} {user.car.model}</p>}
                 </motion.div>
               </>
             )}

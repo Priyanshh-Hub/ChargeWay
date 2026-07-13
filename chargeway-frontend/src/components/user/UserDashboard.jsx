@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { api } from '../../api/api';
 import { GlassCard, Btn } from '../ui/index';
 import Icon from '../ui/Icon';
+import VehicleVisual from '../vehicle/VehicleVisual';
 
 const UserDashboard = ({ user, setActiveView, activeBooking, onCancelBooking }) => {
   const { car } = user;
@@ -19,11 +20,6 @@ const UserDashboard = ({ user, setActiveView, activeBooking, onCancelBooking }) 
 
   const maxSpend = spending ? Math.max(...spending.spending, 1) : 1;
 
-  // Always use the image URL directly — never wrap in serverImg()
-  const carImageSrc = car?.image?.startsWith('http')
-    ? car.image
-    : `https://placehold.co/600x300/0A1628/00C4FF?text=${encodeURIComponent((car?.brand || "") + "+" + (car?.model || ""))}`;
-
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -33,16 +29,9 @@ const UserDashboard = ({ user, setActiveView, activeBooking, onCancelBooking }) 
           <GlassCard className="relative overflow-hidden h-full">
             <div className="absolute inset-0 opacity-5" style={{ backgroundImage: "radial-gradient(circle at 70% 50%, #00C4FF 0%, transparent 60%)" }} />
 
-            {/* Full car image at top */}
-            <div className="w-full h-52 overflow-hidden bg-slate-900/80">
-              <img
-                src={carImageSrc}
-                alt={`${car?.brand} ${car?.model}`}
-                className="w-full h-full object-contain p-4"
-                onError={e => {
-                  e.target.src = `https://placehold.co/600x300/0A1628/00C4FF?text=${encodeURIComponent((car?.brand || "") + "+" + (car?.model || ""))}`;
-                }}
-              />
+            {/* Vehicle illustration — always renders, no network dependency */}
+            <div className="w-full h-52 overflow-hidden bg-slate-900/80 relative">
+              <VehicleVisual color={car?.color} connectorType={car?.connectorType} size="lg" charging={!!activeBooking} />
             </div>
 
             <div className="relative z-10 p-6">
@@ -95,8 +84,9 @@ const UserDashboard = ({ user, setActiveView, activeBooking, onCancelBooking }) 
               <h3 className="font-bold text-slate-300 mb-4">Quick Actions</h3>
               <div className="space-y-2">
                 {[
-                  { icon: "stations", label: "Find Stations", view: "findstations", color: "#00C4FF" },
-                  { icon: "booking",  label: "My Bookings",   view: "bookings",     color: "#60a5fa" },
+                  { icon: "stations", label: "Find a Station", view: "findstations", color: "#00C4FF" },
+                  { icon: "booking",  label: "Charging Sessions",   view: "bookings",     color: "#60a5fa" },
+                  { icon: "car",      label: "My Vehicles",   view: "vehicles",     color: "#fbbf24" },
                   { icon: "invoices", label: "Invoices",      view: "invoices",     color: "#a78bfa" },
                   { icon: "user",     label: "My Profile",    view: "profile",      color: "#34d399" },
                 ].map(a => (
@@ -119,7 +109,7 @@ const UserDashboard = ({ user, setActiveView, activeBooking, onCancelBooking }) 
       <GlassCard className="p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h3 className="font-bold text-white text-lg">My Spending History</h3>
+            <h3 className="font-bold text-white text-lg">Charging Expenses</h3>
             <p className="text-slate-500 text-xs mt-0.5">Last 6 months</p>
           </div>
           {spending && (
@@ -135,6 +125,10 @@ const UserDashboard = ({ user, setActiveView, activeBooking, onCancelBooking }) 
               <div>
                 <p className="text-purple-400 font-black text-xl">{spending.totals.sessions}</p>
                 <p className="text-slate-500 text-xs">Sessions</p>
+              </div>
+              <div>
+                <p className="text-emerald-400 font-black text-xl">{(spending.totals.energy * 0.82).toFixed(0)}</p>
+                <p className="text-slate-500 text-xs">kg CO₂ Saved</p>
               </div>
             </div>
           )}

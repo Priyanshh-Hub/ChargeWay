@@ -9,52 +9,55 @@ export const CAR_BRANDS = [
   { name: "BYD",      logo: "https://www.carlogos.org/car-logos/byd-logo.png" },
 ];
 
+// All connector types used across the catalog, for the compatibility filter UI.
+export const CONNECTOR_TYPES = ["CCS2", "Type 2", "CHAdeMO", "GB/T"];
+
 // Using placehold.co as guaranteed fallback with car name text
 // These NEVER block and always render
 export const CAR_MODELS = [
   {
     brand: "Tata", model: "Nexon EV",
-    battery_kwh: 40.5, range_km: 453, color: "Teal", efficiency: 11.1,
+    battery_kwh: 40.5, range_km: 453, color: "Teal", efficiency: 11.1, connectorType: "CCS2",
     image: "https://placehold.co/600x300/0A1628/00C4FF?text=Tata+Nexon+EV"
   },
   {
     brand: "Tata", model: "Tiago EV",
-    battery_kwh: 24, range_km: 315, color: "Gray", efficiency: 13.1,
+    battery_kwh: 24, range_km: 315, color: "Gray", efficiency: 13.1, connectorType: "CCS2",
     image: "https://placehold.co/600x300/0A1628/00C4FF?text=Tata+Tiago+EV"
   },
   {
     brand: "Mahindra", model: "XUV400",
-    battery_kwh: 39.4, range_km: 456, color: "Blue", efficiency: 11.5,
+    battery_kwh: 39.4, range_km: 456, color: "Blue", efficiency: 11.5, connectorType: "CCS2",
     image: "https://placehold.co/600x300/0A1628/00C4FF?text=Mahindra+XUV400"
   },
   {
     brand: "Hyundai", model: "Ioniq 5",
-    battery_kwh: 77.4, range_km: 488, color: "Gray", efficiency: 6.3,
+    battery_kwh: 77.4, range_km: 488, color: "Gray", efficiency: 6.3, connectorType: "CCS2",
     image: "https://placehold.co/600x300/0A1628/00C4FF?text=Hyundai+Ioniq+5"
   },
   {
     brand: "Kia", model: "EV6",
-    battery_kwh: 77.4, range_km: 499, color: "Gray", efficiency: 6.4,
+    battery_kwh: 77.4, range_km: 499, color: "Gray", efficiency: 6.4, connectorType: "CCS2",
     image: "https://placehold.co/600x300/0A1628/00C4FF?text=Kia+EV6"
   },
   {
     brand: "Audi", model: "e-tron GT",
-    battery_kwh: 93.4, range_km: 488, color: "Gray", efficiency: 5.2,
+    battery_kwh: 93.4, range_km: 488, color: "Gray", efficiency: 5.2, connectorType: "CCS2",
     image: "https://placehold.co/600x300/1a0a28/a78bfa?text=Audi+e-tron+GT"
   },
   {
     brand: "Porsche", model: "Taycan",
-    battery_kwh: 93.4, range_km: 484, color: "Blue", efficiency: 5.2,
+    battery_kwh: 93.4, range_km: 484, color: "Blue", efficiency: 5.2, connectorType: "CCS2",
     image: "https://placehold.co/600x300/1a0a28/a78bfa?text=Porsche+Taycan"
   },
   {
     brand: "Tesla", model: "Model 3",
-    battery_kwh: 75, range_km: 560, color: "White", efficiency: 7.5,
+    battery_kwh: 75, range_km: 560, color: "White", efficiency: 7.5, connectorType: "Type 2",
     image: "https://placehold.co/600x300/0A1628/00C4FF?text=Tesla+Model+3"
   },
   {
     brand: "BYD", model: "Atto 3",
-    battery_kwh: 60.5, range_km: 420, color: "White", efficiency: 7.1,
+    battery_kwh: 60.5, range_km: 420, color: "White", efficiency: 7.1, connectorType: "CCS2",
     image: "https://placehold.co/600x300/0A1628/00C4FF?text=BYD+Atto+3"
   },
 ];

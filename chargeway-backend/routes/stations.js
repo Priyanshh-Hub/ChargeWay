@@ -33,9 +33,17 @@ router.get("/:id", async (req, res) => {
 // POST /api/stations — Admin only
 router.post("/", verifyToken, requireRole("Admin"), async (req, res) => {
   try {
+    if (!req.body.managerId) {
+      return res.status(400).json({ error: "Every station must have a manager assigned." });
+    }
+    const manager = await User.findById(req.body.managerId);
+    if (!manager || manager.role !== "Station Manager") {
+      return res.status(400).json({ error: "managerId must belong to an existing Station Manager account." });
+    }
     const station = new Station(req.body);
     await station.save();
-    res.status(201).json({ station });
+    const populated = await Station.findById(station._id).populate("managerId", "name email");
+    res.status(201).json({ station: populated });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -115,7 +123,17 @@ router.put("/:id/edit", verifyToken, requireRole("Admin"), async (req, res) => {
     if (price_per_kwh !== undefined) station.price_per_kwh = parseFloat(price_per_kwh);
     if (facilities    !== undefined) station.facilities    = facilities;
     if (status        !== undefined) station.status        = status;
-    if (managerId     !== undefined) station.managerId     = managerId || null;
+
+    if (managerId !== undefined) {
+      if (!managerId) {
+        return res.status(400).json({ error: "Every station must have a manager — assign a different one instead of removing it." });
+      }
+      const manager = await User.findById(managerId);
+      if (!manager || manager.role !== "Station Manager") {
+        return res.status(400).json({ error: "managerId must belong to an existing Station Manager account." });
+      }
+      station.managerId = managerId;
+    }
 
     await station.save();
     const populated = await Station.findById(station._id).populate("managerId", "name email");

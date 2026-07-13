@@ -9,7 +9,7 @@ const ChargerSchema = new mongoose.Schema({
 
 const StationSchema = new mongoose.Schema({
   name:          { type: String, required: true },
-  managerId:     { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  managerId:     { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   address:       { type: String, required: true },
   lat:           { type: Number, required: true },
   lng:           { type: Number, required: true },

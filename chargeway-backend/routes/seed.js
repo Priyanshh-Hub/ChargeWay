@@ -5,11 +5,23 @@ const Booking = require("../models/Booking");
 
 const router = express.Router();
 
-// POST /api/seed — Dev only
+// POST /api/seed — Dev only. Requires SEED_SECRET so a reachable dev/staging
+// server can't have its database wiped by anyone who finds the URL.
 router.post("/seed", async (req, res) => {
   if (process.env.NODE_ENV === "production") {
     return res.status(403).json({ error: "Seed not allowed in production" });
   }
+
+  const expectedSecret = process.env.SEED_SECRET;
+  if (expectedSecret) {
+    const provided = req.headers["x-seed-secret"] || req.body?.secret;
+    if (provided !== expectedSecret) {
+      return res.status(401).json({ error: "Invalid or missing seed secret. Pass it as header 'x-seed-secret'." });
+    }
+  } else {
+    console.warn("⚠️  SEED_SECRET is not set — /api/seed is unauthenticated. Set SEED_SECRET in .env before deploying anywhere reachable.");
+  }
+
   try {
     await User.deleteMany({});
     await Station.deleteMany({});
@@ -18,23 +30,27 @@ router.post("/seed", async (req, res) => {
     const adminUser = await new User({
       name: "Sam Admin", email: "sam.admin@chargeway.com", phone: "9000000001",
       password: "password", role: "Admin", joinDate: new Date("2024-01-01"),
+      isVerified: true,
     }).save();
 
     const managerUser = await new User({
       name: "Alex Station", email: "alex.station@chargeway.com", phone: "9123456780",
       password: "password", role: "Station Manager", joinDate: new Date("2024-02-10"),
+      isVerified: true,
     }).save();
 
-    const regularUser = await new User({
+    const regularUser = new User({
       name: "Priyansh Patel", email: "priyanshpatel@gmail.com", phone: "9876543210",
       password: "password", role: "User", joinDate: new Date("2024-01-15"),
-      car: {
+      isVerified: true,
+      cars: [{
         brand: "Tata", model: "Nexon EV", battery_kwh: 40.5, range_km: 453,
         color: "Signature Teal", efficiency: 11.1, vehicleNumber: "MH12AB3456",
-        battery: 85,
-        image: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/69/Tata_Nexon_EV_India_2020_front_view.jpg/320px-Tata_Nexon_EV_India_2020_front_view.jpg",
-      },
-    }).save();
+        battery: 85, batteryHealth: 96, connectorType: "CCS2", isFavorite: true,
+      }],
+    });
+    regularUser.syncPrimaryCar(); // keeps legacy `car` field in sync with `cars`
+    await regularUser.save();
 
     const station1 = await new Station({
       name: "GreenCharge Hub", managerId: managerUser._id,
@@ -75,7 +91,15 @@ router.post("/seed", async (req, res) => {
       costPerKwh: 20, platformFee: 20, totalCost: 380.00, status: "Completed", paymentMethod: "Credit Card",
     }).save();
 
-    res.json({ message: "✅ Database seeded successfully", users: 3, stations: 2, bookings: 2 });
+    res.json({
+      message: "✅ Database seeded successfully",
+      users: 3, stations: 2, bookings: 2,
+      demoCredentials: [
+        { role: "Admin",           email: "sam.admin@chargeway.com",     password: "password" },
+        { role: "Station Manager", email: "alex.station@chargeway.com",  password: "password" },
+        { role: "User",            email: "priyanshpatel@gmail.com",     password: "password" },
+      ],
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
