@@ -370,15 +370,48 @@ const Register = ({ onLogin, onNavigate }) => {
       </motion.div>
 
       <Modal open={termsOpen} onClose={() => setTermsOpen(false)} title="Terms & Conditions" maxWidth="max-w-lg">
-        <div className="text-sm text-slate-400 space-y-3 max-h-96 overflow-y-auto pr-1">
-          <p>By creating a ChargeWay account, you agree to use the platform responsibly for locating, booking, and paying for EV charging sessions.</p>
-          <p>You're responsible for the accuracy of your vehicle and payment details, and for cancelling bookings you no longer need so chargers stay available for other drivers.</p>
-          <p>Station Managers are responsible for keeping charger status, pricing, and amenities accurate and up to date.</p>
-          <p>We store your account data to operate the service and will never sell it to third parties. See our Privacy Policy for details on data handling.</p>
-          <p className="text-slate-500 text-xs">This is placeholder legal copy for the demo app — replace with real Terms & Privacy Policy content before launch.</p>
-        </div>
-        <Btn onClick={() => setTermsOpen(false)} className="w-full mt-5">Close</Btn>
-      </Modal>
+  <div className="text-sm text-slate-400 space-y-3 max-h-96 overflow-y-auto pr-1">
+    <p><strong className="text-white">1. Acceptance of Terms</strong><br />
+    By creating a ChargeWay account, you agree to be bound by these Terms & Conditions and our Privacy Policy. If you do not agree, please do not use the platform.</p>
+
+    <p><strong className="text-white">2. What ChargeWay Does</strong><br />
+    ChargeWay is a platform for discovering, booking, and paying for EV charging sessions at partner stations, and for Station Managers to list and manage their charging stations on the platform.</p>
+
+    <p><strong className="text-white">3. Account Responsibilities</strong><br />
+    You are responsible for the accuracy of the information you provide (including vehicle and contact details) and for keeping your login credentials confidential. You must be legally able to enter into agreements to register.</p>
+
+    <p><strong className="text-white">4. Bookings & Cancellations</strong><br />
+    Booking a charging slot reserves that charger for the selected time window. Please cancel bookings you no longer need so the slot remains available to other drivers. Repeated no-shows may result in booking restrictions.</p>
+
+    <p><strong className="text-white">5. Payments</strong><br />
+    Charges shown at checkout reflect the station's published pricing plus any applicable platform fee and taxes (GST). Payment is due at the time of booking or session completion, as indicated in the app.</p>
+
+    <p><strong className="text-white">6. Station Manager Obligations</strong><br />
+    Station Managers are responsible for keeping charger availability, pricing, and station information accurate and up to date, and for ensuring listed chargers are safe and functional.</p>
+
+    <p><strong className="text-white">7. Prohibited Use</strong><br />
+    You agree not to misuse the platform — including falsifying bookings, interfering with other users' access to chargers, or attempting to access accounts or data that isn't yours.</p>
+
+    <p><strong className="text-white">8. Limitation of Liability</strong><br />
+    ChargeWay facilitates bookings between drivers and station operators but is not responsible for the physical condition of charging equipment, vehicle damage, or delays caused by third parties. Use charging stations at your own risk and in accordance with posted safety instructions.</p>
+
+    <p><strong className="text-white">9. Account Suspension & Termination</strong><br />
+    We may suspend or terminate accounts that violate these terms. You may delete your own account at any time from your Profile settings.</p>
+
+    <p><strong className="text-white">10. Changes to These Terms</strong><br />
+    We may update these terms from time to time. Continued use of ChargeWay after changes means you accept the updated terms.</p>
+
+    <p><strong className="text-white">11. Governing Law</strong><br />
+    These terms are governed by the laws of India.</p>
+
+    <p><strong className="text-white">12. Contact</strong><br />
+    Questions about these terms can be reached at support@chargeway.com.</p>
+
+    <p><strong className="text-white">13. Privacy</strong><br />
+    We collect your name, email, phone, vehicle, and booking details to operate your account. We never sell your data to third parties. You can delete your account and data anytime from Profile → Danger Zone.</p>
+  </div>
+  <Btn onClick={() => setTermsOpen(false)} className="w-full mt-5">Close</Btn>
+</Modal>
     </div>
   );
 };

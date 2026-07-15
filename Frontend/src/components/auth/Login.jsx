@@ -161,7 +161,6 @@ const Login = ({ onLogin, onNavigate }) => {
                   style={{ background: "rgba(255,255,255,0.05)", borderColor: "rgba(255,255,255,0.1)" }}>
                   <option>User</option>
                   <option>Station Manager</option>
-                  <option>Admin</option>
                 </select>
               </div>
 
