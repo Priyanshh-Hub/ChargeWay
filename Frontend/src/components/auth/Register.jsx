@@ -275,9 +275,15 @@ const Register = ({ onLogin, onNavigate }) => {
                   <p className="text-slate-400">Open Google Maps → Search location → Right-click → Click coordinates at top</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400 mb-2 font-medium">Quick fill — Gujarat Cities:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {[{ city: "Ahmedabad", lat: "23.0225", lng: "72.5714" }, { city: "Surat", lat: "21.1702", lng: "72.8311" }, { city: "Vadodara", lat: "22.3072", lng: "73.1812" }, { city: "Rajkot", lat: "22.3039", lng: "70.8022" }, { city: "Gandhinagar", lat: "23.2156", lng: "72.6369" }].map(c => (
+                 <p className="text-xs text-slate-400 mb-2 font-medium">Quick fill — Major Cities:</p>
+<div className="flex flex-wrap gap-2">
+  {[
+    { city: "Ahmedabad", lat: "23.0225", lng: "72.5714" },
+    { city: "Mumbai",    lat: "19.0760", lng: "72.8777" },
+    { city: "Bangalore", lat: "12.9716", lng: "77.5946" },
+    { city: "Hyderabad", lat: "17.3850", lng: "78.4867" },
+    { city: "Udaipur",   lat: "24.5854", lng: "73.7125" },
+  ].map(c => (
                       <button key={c.city} onClick={() => setStationInfo(p => ({ ...p, lat: c.lat, lng: c.lng }))}
                         className="text-xs px-3 py-1.5 rounded-lg border border-white/10 text-slate-400 hover:border-cyan-400/40 hover:text-cyan-400 transition-all"
                         style={{ background: "rgba(255,255,255,0.03)" }}>{c.city}</button>
